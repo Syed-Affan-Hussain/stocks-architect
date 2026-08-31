@@ -27,10 +27,10 @@ from market_agent.sources.yahoo_prices import YahooPriceSeriesProvider
 from market_agent.store import db
 
 
-def generate(db_path: str, out_path: str) -> None:
+def generate(db_path: str, out_path: str, repo: str | None = None, branch: str = "master") -> None:
     conn = db.connect(db_path)
     try:
-        data = collect_dashboard_data(conn, ohlcv=YahooPriceSeriesProvider())
+        data = collect_dashboard_data(conn, ohlcv=YahooPriceSeriesProvider(), repo=repo, branch=branch)
     finally:
         conn.close()
     html = render_page(data, static=True)
@@ -38,15 +38,18 @@ def generate(db_path: str, out_path: str) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote {out_path} ({len(html):,} bytes) - {len(data['predictions'])} predictions, "
-          f"{len(data['price_series'])} entities with price history.")
+          f"{len(data['price_series'])} entities with price history"
+          f"{', repo_edit_url=' + data['repo_edit_url'] if data['repo_edit_url'] else ' (no --repo given)'}.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default=DEFAULT_DB_PATH)
     parser.add_argument("--out", default="docs/index.html")
+    parser.add_argument("--repo", default=None, help='"owner/name", e.g. from GitHub Actions\' ${{ github.repository }}')
+    parser.add_argument("--branch", default="master")
     args = parser.parse_args()
-    generate(args.db, args.out)
+    generate(args.db, args.out, repo=args.repo, branch=args.branch)
     return 0
 
 

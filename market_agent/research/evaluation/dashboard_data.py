@@ -46,7 +46,14 @@ def _collect_price_series(ohlcv: OHLCVProvider, entities: list[str], as_of: date
 
 
 def collect_dashboard_data(conn: sqlite3.Connection, ohlcv: OHLCVProvider | None = None,
-                            as_of: datetime | None = None) -> dict:
+                            as_of: datetime | None = None, repo: str | None = None,
+                            branch: str = "master") -> dict:
+    """`repo`: "owner/name" if known (static_dashboard.py passes this from
+    --repo, sourced from GitHub Actions' own `github.repository` context
+    var - never guessed). Used only to build `repo_edit_url`, the deep
+    link dashboard_template.py's static "Add via GitHub" control opens -
+    None if not supplied, which the template treats as "no repo link
+    configured" rather than fabricating one from a guessed path."""
     as_of = as_of or datetime.now(timezone.utc)
     rows = db.all_predictions(conn)
     predictions = []
@@ -82,6 +89,8 @@ def collect_dashboard_data(conn: sqlite3.Connection, ohlcv: OHLCVProvider | None
 
     entities = sorted({r["entity"] for r in rows})
     price_series = _collect_price_series(ohlcv, entities, as_of) if ohlcv is not None else {}
+    repo_edit_url = f"https://github.com/{repo}/edit/{branch}/watchlist.txt" if repo else None
 
     return {"predictions": predictions, "metrics": metrics, "modes": list(MODES), "axes": list(IMPLICATION_AXES),
-            "db_path": DEFAULT_DB_PATH, "price_series": price_series, "generated_at": as_of.isoformat()}
+            "db_path": DEFAULT_DB_PATH, "price_series": price_series, "generated_at": as_of.isoformat(),
+            "repo_edit_url": repo_edit_url}

@@ -19,6 +19,7 @@ isn't something you can sanely hand-edit on github.com.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -72,7 +73,9 @@ def main() -> int:
     conn.close()
 
     print(f"Regenerating {DASHBOARD_OUT}...")
-    generate(DEFAULT_DB_PATH, DASHBOARD_OUT)
+    # GITHUB_REPOSITORY ("owner/repo") is set automatically by GitHub Actions on every run - never
+    # guessed, and correctly None when this script is run locally outside Actions.
+    generate(DEFAULT_DB_PATH, DASHBOARD_OUT, repo=os.environ.get("GITHUB_REPOSITORY"))
     return 0
 
 

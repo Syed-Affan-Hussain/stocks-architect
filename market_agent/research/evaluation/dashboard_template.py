@@ -3,26 +3,29 @@
 static_dashboard.py (GitHub Pages generator), so the two never drift into
 different-looking pages for the same data.
 
-PRICE CHARTS use TradingView's lightweight-charts (github.com/tradingview/
-lightweight-charts, Apache 2.0) loaded from a CDN (unpkg) - the one
-external, browser-side dependency in this whole project, chosen because
-hand-rolling a real candlestick chart would either be worse than a proven,
-purpose-built, 35KB library or a large, unjustified amount of new code.
-Its license requires attribution; see the page footer. The Python backend
-remains stdlib-only - nothing new was added to requirements.txt for this.
+PRICE CHARTS: hand-rolled SVG candlesticks (svgCandlestickChart in the
+embedded JS below) - no charting library, no external script tag. The
+DATA plotted is, and always was, real Yahoo Finance history (via the
+already-existing YahooPriceSeriesProvider/OHLCVProvider in
+dashboard_data.py) - that never changed. What changed is the RENDERER: an
+earlier version used TradingView's open-source lightweight-charts library
+loaded from a CDN; dropped in favor of a self-contained chart matching
+every other chart on this page (all already hand-rolled SVG), so there is
+no browser-side dependency at all and no third-party attribution
+requirement. The Python backend has always been stdlib-only.
 
 STATIC vs LIVE: `static=True` (GitHub Pages) removes the "Track a ticker"
-network action (no backend exists there to run it) and replaces it with
-instructions to edit watchlist.txt in the repo; `static=False` (the local
-server) keeps the live POST /api/track control. Every other panel, chart,
-and filter behaves identically in both modes - they render off the exact
-same embedded JSON shape (dashboard_data.collect_dashboard_data).
+network action (no backend exists there to run it) and replaces it with a
+direct link into GitHub's own file editor for watchlist.txt (see
+`repo_edit_url` in dashboard_data.py) - not just an instruction to go find
+the file yourself. `static=False` (the local server) keeps the live POST
+/api/track control. Every other panel, chart, and filter behaves
+identically in both modes - they render off the exact same embedded JSON
+shape (dashboard_data.collect_dashboard_data).
 """
 from __future__ import annotations
 
 import json
-
-LIGHTWEIGHT_CHARTS_CDN = "https://unpkg.com/lightweight-charts@5/dist/lightweight-charts.standalone.production.js"
 
 STYLE = r"""
 :root{
@@ -98,7 +101,7 @@ tbody tr.row:hover{background:var(--panel2);cursor:pointer;}
 .axis-bar-val{width:44px;text-align:right;font-family:var(--mono);}
 .reasoning{font-size:11.5px;color:var(--text-dim);font-family:var(--sans);line-height:1.5;background:var(--panel2);padding:8px 10px;border-radius:3px;}
 .metrics-table td, .metrics-table th{font-size:11.5px;}
-#priceChart{width:100%;height:320px;}
+#priceChart{width:100%;}
 footer.credits{padding:14px 22px 30px;color:var(--text-faint);font-size:10.5px;border-top:1px solid var(--border);}
 footer.credits a{color:var(--text-dim);}
 """
@@ -113,15 +116,38 @@ def render_page(data: dict, static: bool) -> str:
     )
     refresh_control = "" if static else '<button class="btn small" onclick="refresh()">Refresh</button>'
     track_control = (
-        f'<div class="static-note">Static build (GitHub Pages) — no live backend here. '
-        f'To track a new ticker: add it to <code>watchlist.txt</code> in the repo (edit directly on '
-        f'GitHub, or push a commit) and wait for the next scheduled run.</div>'
+        (
+            '<div class="track-row">'
+            '<input id="tickerInput" placeholder="e.g. AMD" maxlength="10" onkeydown="if(event.key===\'Enter\')suggestTicker()">'
+            '<button class="btn" id="suggestBtn" onclick="suggestTicker()">Add via GitHub</button></div>'
+            '<div class="track-status" id="trackStatus"></div>'
+            '<div class="static-note" style="margin-top:8px">No live backend on a static page - this copies the '
+            'ticker and opens GitHub\'s editor for <code>watchlist.txt</code>. Paste, add it on its own line, '
+            'commit. Picked up on the next scheduled or manually-triggered run.</div>'
+            if data.get("repo_edit_url") else
+            '<div class="static-note">Static build (GitHub Pages) - no live backend here, and no repo link was '
+            'configured for this build. To track a new ticker: add it to <code>watchlist.txt</code> in the repo '
+            'and wait for the next scheduled run.</div>'
+        )
         if static else
         '<div class="track-row">'
         '<input id="tickerInput" placeholder="e.g. AMD" maxlength="10" onkeydown="if(event.key===\'Enter\')trackTicker()">'
         '<button class="btn" id="trackBtn" onclick="trackTicker()">Track</button></div>'
         '<div class="track-status" id="trackStatus"></div>'
     )
+    suggest_js = r"""
+function suggestTicker(){
+  const input = document.getElementById("tickerInput");
+  const ticker = input.value.trim().toUpperCase();
+  const status = document.getElementById("trackStatus");
+  if(!ticker){ status.textContent = "Type a ticker first."; return; }
+  const editUrl = window.__DATA__.repo_edit_url;
+  if(!editUrl){ status.textContent = "No repo link configured for this build - edit watchlist.txt directly."; return; }
+  if(navigator.clipboard) navigator.clipboard.writeText(ticker).catch(()=>{});
+  window.open(editUrl, "_blank", "noopener");
+  status.textContent = `"${ticker}" copied to clipboard - paste it on its own line in the editor that just opened, then commit.`;
+}
+""" if static else ""
     track_js = "" if static else r"""
 async function trackTicker(){
   const input = document.getElementById("tickerInput");
@@ -151,11 +177,8 @@ function refresh(){ loadData(); }
         if static else
         'document.getElementById("dbpath").textContent = window.__DATA__.db_path;'
     )
-    lightweight_charts_script = f'<script src="{LIGHTWEIGHT_CHARTS_CDN}"></script>'
-
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <title>Research Evaluation Terminal</title>
-{lightweight_charts_script}
 <style>{STYLE}</style></head><body>
 <div class="topbar">
   <h1>RESEARCH <span>EVAL</span> TERMINAL</h1>
@@ -216,8 +239,7 @@ function refresh(){ loadData(); }
     </div>
   </div>
 </div>
-<footer class="credits">Price charts rendered with <a href="https://github.com/tradingview/lightweight-charts" target="_blank" rel="noopener">TradingView Lightweight Charts</a> (Apache 2.0).
-No investment advice; no predictive-validity claim is made until real prospective observations accumulate.</footer>
+<footer class="credits">Price history from Yahoo Finance. No investment advice; no predictive-validity claim is made until real prospective observations accumulate.</footer>
 
 <script>
 window.__DATA__ = {data_json};
@@ -271,29 +293,52 @@ function renderStats(){{
     `<div class="stat"><div class="n">${{n}}</div><div class="l">${{l}}</div></div>`).join("");
 }}
 
+function svgCandlestickChart(bars, opts){{
+  // Hand-rolled - no charting library. `bars`: [{{time,open,high,low,close}}, ...], oldest first.
+  const W = opts.width||900, H = opts.height||300, padL=52, padR=14, padT=10, padB=22;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const lo = Math.min(...bars.map(b=>b.low)), hi = Math.max(...bars.map(b=>b.high));
+  const range = (hi-lo) || 1;
+  const y = v => padT + plotH - ((v-lo)/range)*plotH;
+  const slot = plotW/bars.length;
+  const candleW = Math.max(1.5, Math.min(9, slot*0.62));
+  let candles = "", gridLines = "", labels = "";
+  const gridN = 4;
+  for(let i=0;i<=gridN;i++){{
+    const v = lo + (range*i/gridN);
+    const gy = y(v);
+    gridLines += `<line x1="${{padL}}" y1="${{gy.toFixed(1)}}" x2="${{W-padR}}" y2="${{gy.toFixed(1)}}" stroke="#1F2830"/>
+      <text x="${{padL-6}}" y="${{(gy+3).toFixed(1)}}" font-size="9.5" fill="#4E5964" text-anchor="end">${{v.toFixed(2)}}</text>`;
+  }}
+  const labelEvery = Math.max(1, Math.round(bars.length/6));
+  bars.forEach((b,i)=>{{
+    const cx = padL + slot*i + slot/2;
+    const up = b.close >= b.open;
+    const color = up ? "#1FCF7A" : "#F0495A";
+    const bodyTop = y(Math.max(b.open,b.close)), bodyBot = y(Math.min(b.open,b.close));
+    candles += `<line x1="${{cx.toFixed(1)}}" y1="${{y(b.high).toFixed(1)}}" x2="${{cx.toFixed(1)}}" y2="${{y(b.low).toFixed(1)}}" stroke="${{color}}" stroke-width="1"/>
+      <rect x="${{(cx-candleW/2).toFixed(1)}}" y="${{bodyTop.toFixed(1)}}" width="${{candleW.toFixed(1)}}" height="${{Math.max(bodyBot-bodyTop,1).toFixed(1)}}" fill="${{color}}"><title>${{esc(b.time)}}  O:${{b.open.toFixed(2)}} H:${{b.high.toFixed(2)}} L:${{b.low.toFixed(2)}} C:${{b.close.toFixed(2)}}</title></rect>`;
+    if(i % labelEvery === 0){{
+      labels += `<text x="${{cx.toFixed(1)}}" y="${{H-6}}" font-size="9" fill="#4E5964" text-anchor="middle">${{esc(b.time.slice(5))}}</text>`;
+    }}
+  }});
+  const last = bars[bars.length-1];
+  return `<svg viewBox="0 0 ${{W}} ${{H}}" width="100%" height="${{H}}">${{gridLines}}${{candles}}${{labels}}
+    <text x="${{W-padR}}" y="${{padT+10}}" font-size="12" fill="${{last.close>=last.open?'#1FCF7A':'#F0495A'}}" text-anchor="end" font-weight="700">${{last.close.toFixed(2)}}</text>
+  </svg>`;
+}}
+
 function renderPriceChart(){{
   document.getElementById("priceEntityLabel").textContent = STATE.priceEntity || "(none tracked)";
   const container = document.getElementById("priceChart");
   const emptyEl = document.getElementById("priceChartEmpty");
   container.innerHTML = ""; emptyEl.innerHTML = "";
   const series = STATE.priceEntity ? (window.__DATA__.price_series||{{}})[STATE.priceEntity] : null;
-  if(!series || series.length===0 || typeof LightweightCharts==="undefined"){{
-    emptyEl.innerHTML = '<div class="empty-state">' +
-      (typeof LightweightCharts==="undefined" ? "Chart library did not load (offline?)." : "No price history available for this entity.") +
-      '</div>';
+  if(!series || series.length===0){{
+    emptyEl.innerHTML = '<div class="empty-state">No price history available for this entity.</div>';
     return;
   }}
-  const chart = LightweightCharts.createChart(container, {{
-    layout: {{ background: {{color:"#10151A"}}, textColor:"#7C8A97" }},
-    grid: {{ vertLines:{{color:"#1F2830"}}, horzLines:{{color:"#1F2830"}} }},
-    timeScale: {{ borderColor:"#1F2830" }}, rightPriceScale: {{ borderColor:"#1F2830" }},
-    autoSize: true,
-  }});
-  const candles = chart.addSeries(LightweightCharts.CandlestickSeries, {{
-    upColor:"#1FCF7A", downColor:"#F0495A", borderVisible:false, wickUpColor:"#1FCF7A", wickDownColor:"#F0495A",
-  }});
-  candles.setData(series);
-  chart.timeScale().fitContent();
+  container.innerHTML = svgCandlestickChart(series, {{}});
 }}
 
 // --- SVG chart helpers (no library - plain SVG strings, used for everything except the price chart) ---
@@ -476,6 +521,7 @@ function renderAll(){{
   renderStats(); renderPriceChart(); renderImpactChart(); renderAxesChart(); renderEquityChart(); renderMetricsTable(); renderLogTable();
 }}
 {track_js}
+{suggest_js}
 {init_js}
 buildFilters(); renderAll();
 </script>
