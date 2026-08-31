@@ -1,0 +1,11 @@
+# Prospective evaluation watchlist - one ticker per line, '#' comments allowed.
+# Read by scripts/run_prospective_cycle.py on every scheduled GitHub Actions
+# run (see .github/workflows/prospective_eval.yml). Edit this file directly
+# on GitHub (or push a commit) to add/remove a ticker - it's picked up on the
+# next scheduled run, no code change needed.
+NVDA
+AAPL
+MSFT
+TSLA
+JPM
+AMD

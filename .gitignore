@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Downloaded/cached market data (regenerate via scripts/download_market_data.py)
+data/raw/
+data/cache/
+data_cache/*
+!data_cache/research/
+data_cache/research/*
+!data_cache/research/market_agent_research.sqlite
+# The one exception: the prospective-evaluation prediction log IS committed, deliberately - it's the
+# persistent state .github/workflows/prospective_eval.yml reads and writes back on every scheduled
+# run (see scripts/run_prospective_cycle.py), not a regenerable cache like everything else here.
+.claude/scheduled_tasks.lock

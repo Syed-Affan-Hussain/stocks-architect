@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "evaluation-dashboard",
+      "runtimeExecutable": ".venv/Scripts/python",
+      "runtimeArgs": ["-m", "market_agent.research.evaluation.dashboard", "--port", "8765"],
+      "port": 8765
+    }
+  ]
+}

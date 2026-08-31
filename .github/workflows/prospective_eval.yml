@@ -1,0 +1,66 @@
+name: Prospective Evaluation Cycle
+
+# Runs the whole prospective harness independent of any local machine:
+# reads watchlist.txt, logs one real prediction pass per entity (real
+# SEC/Yahoo/Google News calls, all public, no API key needed anywhere in
+# this project), resolves any outcome that has genuinely matured since
+# the last run, regenerates the static dashboard (docs/index.html, served
+# by GitHub Pages once enabled in repo Settings -> Pages -> Deploy from a
+# branch -> main -> /docs), and commits the updated prediction log +
+# dashboard back to the repo.
+#
+# WHY COMMIT THE SQLITE FILE INSTEAD OF AN EXTERNAL DATABASE: this is a
+# personal-scale, low-write-frequency log (a handful of rows per entity
+# per scheduled run) - a real external database would be more "correct"
+# infrastructure but is unjustified complexity/cost for this project's
+# actual scale. Disclosed tradeoff: the file's diffs accumulate in git
+# history over time; for a long-running deployment, squashing history or
+# moving to a real database is the natural next step, not attempted here.
+
+on:
+  schedule:
+    # 21:00 UTC, weekdays only - after US market close. Cron minute/hour
+    # are UTC regardless of any daylight-saving change; this is a
+    # disclosed, fixed choice, not adjusted for DST.
+    - cron: "0 21 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prospective-eval-cycle
+  cancel-in-progress: false
+
+jobs:
+  run-cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests (regression gate - do not proceed on a broken build)
+        run: python -m pytest tests/ -q
+
+      - name: Run prospective cycle (log -> resolve -> regenerate dashboard)
+        run: python scripts/run_prospective_cycle.py
+
+      - name: Commit and push updated prediction log + dashboard
+        run: |
+          git config user.name "prospective-eval-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data_cache/research/market_agent_research.sqlite docs/index.html
+          if git diff --cached --quiet; then
+            echo "No changes to commit this cycle."
+          else
+            git commit -m "Prospective eval cycle: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
