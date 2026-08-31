@@ -6,7 +6,7 @@ name: Prospective Evaluation Cycle
 # this project), resolves any outcome that has genuinely matured since
 # the last run, regenerates the static dashboard (docs/index.html, served
 # by GitHub Pages once enabled in repo Settings -> Pages -> Deploy from a
-# branch -> main -> /docs), and commits the updated prediction log +
+# branch -> master -> /docs), and commits the updated prediction log +
 # dashboard back to the repo.
 #
 # WHY COMMIT THE SQLITE FILE INSTEAD OF AN EXTERNAL DATABASE: this is a
